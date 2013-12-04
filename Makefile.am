@@ -5,4 +5,6 @@ AM_LDFLAGS = $(DYPLO_LIBS) $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
 
 bin_PROGRAMS = dyploexampleapp
 
-dyploexampleapp_SOURCES = main.cpp
+dyploexampleapp_SOURCES = main.cpp softwareprocesses.hpp
+
+

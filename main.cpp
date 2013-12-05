@@ -1,3 +1,7 @@
+/* This file is compiled twice, once with and once without HAVE_HARDWARE
+ * defined. The version without HAVE_HARDWARE can run on any posix
+ * system (e.g. a PC), the hardware enabled version needs the Dyplo
+ * logic and driver present. */
 #include "dyplo/hardware.hpp"
 #include <unistd.h>
 #include <iostream>
@@ -42,10 +46,24 @@ int main(int argc, char** argv)
 	try
 	{
 #ifdef HAVE_HARDWARE
+		/* Create objects for hardware control */
 		dyplo::HardwareContext hardware;
 		dyplo::HardwareControl hwControl(hardware);
 		dyplo::FilePollScheduler hardwareScheduler;
+		/* Assume that all bitstreams are partial streams. */
+		hardware.setProgramMode(true);
+		/* One or more bitstream filenames can be provided on the
+		 * commandline. We load them here, no data is present in the
+		 * system yet, so replacing logic is still safe to do here. */
+		for (int arg_ind = 1; arg_ind < argc; ++arg_ind)
+		{
+			hardware.program(argv[arg_ind]);
+		}
+		hardware.setProgramMode(false);
 #endif
+		/* Create the queues first, because they need to exist before
+		 * the processes are started, and at least for as long as the
+		 * processes run. */
 		dyplo::FixedMemoryQueue<std::string, dyplo::PthreadScheduler> q_input_strings(2);
 		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_input_ints(2);
 		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_to_left_adder(2);
@@ -64,6 +82,7 @@ int main(int argc, char** argv)
 #endif
 		dyplo::FixedMemoryQueue<std::string, dyplo::PthreadScheduler> q_to_output(2);
 
+		/* Create the processes */
 		dyplo::ThreadedProcess<
 			typeof(q_input_strings), typeof(q_input_ints),
 			process_string_to_int,
@@ -78,6 +97,10 @@ int main(int argc, char** argv)
 			> p_left_adder;
 
 #ifdef HAVE_HARDWARE
+		/* Hardware processes don't need CPU resources, but they often
+		 * need configuration. The simplest method is to just write to
+		 * the configuration "file", the data will be send via the AXI
+		 * bus to the offsets corresponding to the file position. */
 		{
 			int right_adder_constant = 3;
 			dyplo::File cfg(hardware.openConfig(1, O_WRONLY));
@@ -109,10 +132,10 @@ int main(int argc, char** argv)
 		p_int_to_string.set_output(&q_to_output);
 		p_int_to_string.set_input(&q_from_joining_adder);
 #ifdef HAVE_HARDWARE
-		hwControl.routeAddSingle(0, 0, 1, 0); /* Fifo 0 to node 1 */
-		hwControl.routeAddSingle(1, 0, 2, 0); /* Node 1 to node 2 */
-		hwControl.routeAddSingle(0, 1, 2, 1); /* Fifo 1 to node 2 */
-		hwControl.routeAddSingle(2, 0, 0, 0); /* Node 2 to fifo 0 */
+		hwControl.routeAddSingle(0, 0, 1, 0); /* CPU node Fifo 0 to node 1 fifo 0*/
+		hwControl.routeAddSingle(1, 0, 2, 0); /* Node 1 fifo 0 to node 2 fifo 0*/
+		hwControl.routeAddSingle(0, 1, 2, 1); /* CPU node Fifo 1 to node 2 fifo 1 */
+		hwControl.routeAddSingle(2, 0, 0, 0); /* Node 2 to CPU node fifo 0 */
 #else
 		p_joining_adder.set_output(&q_from_joining_adder);
 		p_joining_adder.set_input_left(&q_from_left_adder);
@@ -128,6 +151,9 @@ int main(int argc, char** argv)
 		p_string_to_int.set_output(&q_input_ints);
 		p_string_to_int.set_input(&q_input_strings);
 		
+		/* Loop reading the input until end of file. Note that output
+		 * is not handled correctly, the program will simply 'abort'
+		 * and data present in the processing pipeline may be lost. */
 		for(;;)
 		{
 			std::string line;

@@ -1,3 +1,30 @@
+/*
+ * softwareprocesses.hpp
+ *
+ * Dyplo example application.
+ *
+ * (C) Copyright 2013,2014 Topic Embedded Products B.V. <Mike Looijmans> (http://www.topic.nl).
+ * All rights reserved.
+ *
+ * This file is part of dyplo-example-app.
+ * dyplo-example-app is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * dyplo-example-app is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with <product name>.  If not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301 USA or see <http://www.gnu.org/licenses/>.
+ *
+ * You can contact Topic by electronic mail via info@topic.nl or via
+ * paper mail at the following address: Postbus 440, 5680 AK Best, The Netherlands.
+ */
 #include "dyplo/threadedprocess.hpp"
 #include "dyplo/cooperativescheduler.hpp"
 #include "dyplo/cooperativeprocess.hpp"

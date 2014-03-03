@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with <product name>.  If not, write to the Free Software
+ * along with Dyplo.  If not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
  * MA 02110-1301 USA or see <http://www.gnu.org/licenses/>.
  *

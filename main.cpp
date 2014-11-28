@@ -33,6 +33,9 @@
 #include <unistd.h>
 #include <iostream>
 #include <sstream>
+#include <string.h>
+#include <ctype.h>
+
 
 #include "softwareprocesses.hpp"
 
@@ -53,7 +56,18 @@ template <class T, int raise, int blocksize> void process_block_add_constant(T* 
 
 void process_string_to_int(int* dest, std::string *src)
 {
-	*dest = atoi(src->c_str());
+	std::string src_digits = "";
+
+	/* Loop to remove non-digit characters */
+	for ( int i = 0; i < src->size(); ++i )
+	{
+		if(isdigit(src->at(i)))
+		{
+			src_digits += src->at(i);
+		}
+	}
+
+	*dest = atoi(src_digits.c_str());
 }
 
 void process_int_to_string(std::string *dest, int* src)

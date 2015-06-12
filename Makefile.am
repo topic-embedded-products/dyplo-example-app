@@ -8,4 +8,4 @@ bin_PROGRAMS = dyploexampleapphw dyploexampleappsw
 dyploexampleappsw_SOURCES = main.cpp softwareprocesses.hpp
 dyploexampleapphw_SOURCES = main.cpp softwareprocesses.hpp
 
-dyploexampleapphw_CPPFLAGS = -DHAVE_HARDWARE
+dyploexampleapphw_CPPFLAGS = $(DYPLO_CFLAGS) -DHAVE_HARDWARE

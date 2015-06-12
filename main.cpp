@@ -109,11 +109,11 @@ int main(int argc, char** argv)
 		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_input_ints(2);
 		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_to_left_adder(2);
 #ifdef HAVE_HARDWARE
-		dyplo::File f_to_right_adder(hardware.openFifo(0, O_WRONLY));
+		dyplo::HardwareFifo f_to_right_adder(hardware.openFifo(0, O_WRONLY));
 		dyplo::FileOutputQueue<int, true> q_to_right_adder(hardwareScheduler, f_to_right_adder, 16);
-		dyplo::File f_from_left_adder(hardware.openFifo(1, O_WRONLY));
+		dyplo::HardwareFifo f_from_left_adder(hardware.openFifo(1, O_WRONLY));
 		dyplo::FileOutputQueue<int, true> q_from_left_adder(hardwareScheduler, f_from_left_adder, 16);
-		dyplo::File f_from_joining_adder(hardware.openFifo(0, O_RDONLY));
+		dyplo::HardwareFifo f_from_joining_adder(hardware.openFifo(0, O_RDONLY));
 		dyplo::FileInputQueue<int> q_from_joining_adder(hardwareScheduler, f_from_joining_adder, 16);
 #else
 		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_to_right_adder(2);
@@ -173,10 +173,14 @@ int main(int argc, char** argv)
 		p_int_to_string.set_output(&q_to_output);
 		p_int_to_string.set_input(&q_from_joining_adder);
 #ifdef HAVE_HARDWARE
-		hwControl.routeAddSingle(0, 0, 1, 0); /* CPU node Fifo 0 to node 1 fifo 0*/
-		hwControl.routeAddSingle(1, 0, 2, 0); /* Node 1 fifo 0 to node 2 fifo 0*/
-		hwControl.routeAddSingle(0, 1, 2, 1); /* CPU node Fifo 1 to node 2 fifo 1 */
-		hwControl.routeAddSingle(2, 0, 0, 0); /* Node 2 to CPU node fifo 0 */
+		/* CPU node Fifo 0 to node 1 fifo 0 */
+		f_to_right_adder.addRouteTo(1);
+		/* Node 1 fifo 0 to node 2 fifo 0 */
+		hwControl.routeAddSingle(1, 0, 2, 0);
+		/* CPU node Fifo 1 to node 2 fifo 1 */
+		f_from_left_adder.addRouteTo(2 | (1 << 8));
+		/* Node 2 to CPU node fifo 0 */
+		f_from_joining_adder.addRouteFrom(2);
 #else
 		p_joining_adder.set_output(&q_from_joining_adder);
 		p_joining_adder.set_input_left(&q_from_left_adder);

@@ -25,17 +25,54 @@
  * You can contact Topic by electronic mail via info@topic.nl or via
  * paper mail at the following address: Postbus 440, 5680 AK Best, The Netherlands.
  */
-/* This file is compiled twice, once with and once without HAVE_HARDWARE
- * defined. The version without HAVE_HARDWARE can run on any posix
- * system (e.g. a PC), the hardware enabled version needs the Dyplo
- * logic and driver present. */
+
+/*  This file is compiled twice, once with and once without HAVE_HARDWARE
+ *  defined. The version without HAVE_HARDWARE can run on any posix
+ *  system (e.g. a PC), the hardware enabled version needs the Dyplo
+ *  (FPGA) logic and driver present.
+ *
+
+ *  This application works as follows:
+
+           ------------------
+           | Keyboard input |
+           | (type a number)|
+           ------------------
+                   |
+                   |
+         ------------------------
+         | Tee node (SW).       |
+         | Replicates the input |
+         | to two outputs.      |
+         ------------------------
+                /           \
+               /             \
+ ------------------------     \
+ | Adder Node (SW / HW).|      \
+ | The number to add    |       \
+ | can be configured.   |        \
+ ------------------------         \
+                    \              \
+                     \   ------------------------------
+                      \  | Joining Adder Node (SW/HW).|
+                       \ | Accumulates two inputs,    |
+                         | left and right             |
+                         ------------------------------
+                              |
+                              |
+                     -----------------------
+                     | Display Node (SW)   |
+                     | Displays the result |
+                     -----------------------
+
+*/
+
 #include "dyplo/hardware.hpp"
 #include <unistd.h>
 #include <iostream>
 #include <sstream>
 #include <string.h>
 #include <ctype.h>
-
 
 #include "softwareprocesses.hpp"
 
@@ -44,174 +81,138 @@
 #include "dyplo/cooperativeprocess.hpp"
 #include "dyplo/thread.hpp"
 #ifdef HAVE_HARDWARE
-#	include "dyplo/hardware.hpp"
-#	include "dyplo/filequeue.hpp"
+  #include "dyplo/hardware.hpp"
+  #include "dyplo/filequeue.hpp"
 #endif
+
+int string_to_int(const std::string& src)
+{
+  std::string src_digits = "";
+
+  /* Loop to remove non-digit characters */
+  for ( int i = 0; i < src.size(); ++i )
+  {
+    if (isdigit(src.at(i)))
+    {
+      src_digits += src.at(i);
+    }
+  }
+
+  int result = atoi(src_digits.c_str());
+  return result;
+}
 
 template <class T, int raise, int blocksize> void process_block_add_constant(T* dest, T* src)
 {
-	for (int i = 0; i < blocksize; ++i)
-		*dest++ = (*src++) + raise;
+  for (int i = 0; i < blocksize; ++i)
+    *dest++ = (*src++) + raise;
 }
 
-void process_string_to_int(int* dest, std::string *src)
+void display_int(int* src)
 {
-	std::string src_digits = "";
-
-	/* Loop to remove non-digit characters */
-	for ( int i = 0; i < src->size(); ++i )
-	{
-		if(isdigit(src->at(i)))
-		{
-			src_digits += src->at(i);
-		}
-	}
-
-	*dest = atoi(src_digits.c_str());
-}
-
-void process_int_to_string(std::string *dest, int* src)
-{
-	std::stringstream ss;
-	ss << *src;
-	*dest = ss.str();
-}
-
-void display_string(std::string* src)
-{
-	std::cout << *src << std::endl;
+  std::cout << *src << std::endl;
 }
 
 int main(int argc, char** argv)
 {
-	try
-	{
+  try
+  {
 #ifdef HAVE_HARDWARE
-		/* Create objects for hardware control */
-		dyplo::HardwareContext hardware;
-		dyplo::HardwareControl hwControl(hardware);
-		dyplo::FilePollScheduler hardwareScheduler;
-		/* Assume that all bitstreams are partial streams. */
-		hardware.setProgramMode(true);
-		/* One or more bitstream filenames can be provided on the
-		 * commandline. We load them here, no data is present in the
-		 * system yet, so replacing logic is still safe to do here. */
-		for (int arg_ind = 1; arg_ind < argc; ++arg_ind)
-		{
-			hardware.program(argv[arg_ind]);
-		}
-		hardware.setProgramMode(false);
+    // Create objects for hardware control
+    dyplo::HardwareContext hardware;
+    dyplo::HardwareControl hwControl(hardware);
+    dyplo::FilePollScheduler hardwareScheduler;
+    // Assume that all bitstreams are partial streams.
+    hardware.setProgramMode(true);
+    // One or more bitstream filenames can be provided on the
+    // commandline. We load them here, no data is present in the
+    // system yet, so replacing logic is still safe to do here.
+    for (int arg_ind = 1; arg_ind < argc; ++arg_ind)
+    {
+      hardware.program(argv[arg_ind]);
+    }
+    hardware.setProgramMode(false);
 #endif
-		/* Create the queues first, because they need to exist before
-		 * the processes are started, and at least for as long as the
-		 * processes run. */
-		dyplo::FixedMemoryQueue<std::string, dyplo::PthreadScheduler> q_input_strings(2);
-		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_input_ints(2);
-		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_to_left_adder(2);
+
+/* --- STEP 1 - CREATE QUEUES ---
+   Create the queues first, because they need to exist before
+   the processes are started, and at least for as long as the
+   processes run.
+*/
+    dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_input(2);
 #ifdef HAVE_HARDWARE
-		dyplo::HardwareFifo f_to_right_adder(hardware.openFifo(0, O_WRONLY));
-		dyplo::FileOutputQueue<int, true> q_to_right_adder(hardwareScheduler, f_to_right_adder, 16);
-		dyplo::HardwareFifo f_from_left_adder(hardware.openFifo(1, O_WRONLY));
-		dyplo::FileOutputQueue<int, true> q_from_left_adder(hardwareScheduler, f_from_left_adder, 16);
-		dyplo::HardwareFifo f_from_joining_adder(hardware.openFifo(0, O_RDONLY));
-		dyplo::FileInputQueue<int> q_from_joining_adder(hardwareScheduler, f_from_joining_adder, 16);
+    dyplo::HardwareFifo f_adder(hardware.openFifo(0, O_WRONLY));
+    dyplo::FileOutputQueue<int, true> q_adder(hardwareScheduler, f_adder, 16);
+    dyplo::HardwareFifo f_joining_adder_right(hardware.openFifo(1, O_WRONLY));
+    dyplo::FileOutputQueue<int, true> q_joining_adder_right(hardwareScheduler, f_joining_adder_right, 16);
+    dyplo::HardwareFifo f_output(hardware.openFifo(0, O_RDONLY));
+    dyplo::FileInputQueue<int> q_output(hardwareScheduler, f_output, 16);
 #else
-		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_to_right_adder(2);
-		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_from_left_adder(2);
-		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_from_right_adder(2);
-		dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_from_joining_adder(2);
+    dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_adder(2);
+    dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_joining_adder_left(2);
+    dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_joining_adder_right(2);
+    dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_output(2);
 #endif
-		dyplo::FixedMemoryQueue<std::string, dyplo::PthreadScheduler> q_to_output(2);
 
-		/* Create the processes */
-		dyplo::ThreadedProcess<
-			typeof(q_input_strings), typeof(q_input_ints),
-			process_string_to_int,
-			1 /*blocksize*/ > p_string_to_int;
-
-		TeeProcess<typeof(q_input_ints), typeof(q_to_left_adder), typeof(q_to_right_adder)>
-			p_tee;
-
-		dyplo::ThreadedProcess<
-			typeof(q_to_left_adder), typeof(q_from_left_adder),
-			process_block_add_constant<int, 5, 1>
-			> p_left_adder;
-
+/* --- STEP 2 - CREATE PROCESSES --- */
+    TeeProcess<typeof(q_input), typeof(q_adder), typeof(q_joining_adder_right)> p_tee;
+    // This number will be added by the 'adder process':
+    const int number_to_add = 8;
 #ifdef HAVE_HARDWARE
-		/* Hardware processes don't need CPU resources, but they often
-		 * need configuration. The simplest method is to just write to
-		 * the configuration "file", the data will be send via the AXI
-		 * bus to the offsets corresponding to the file position. */
-		{
-			int right_adder_constant = 3;
-			dyplo::File cfg(hardware.openConfig(1, O_WRONLY));
-			cfg.write(&right_adder_constant, sizeof(right_adder_constant));
-		}
+    // Hardware processes don't need CPU resources, but they often need configuration.
+    // The simplest method is to just write to the configuration "file", the data will be sent
+    // via the AXI bus to the offsets corresponding to the file position.
+    {
+      dyplo::File cfg(hardware.openConfig(1, O_WRONLY));
+      cfg.write(&number_to_add, sizeof(number_to_add));
+    }
 #else
-		dyplo::ThreadedProcess<
-			typeof(q_to_right_adder), typeof(q_from_right_adder),
-			process_block_add_constant<int, 3, 1>
-			> p_right_adder;
-			
-		JoiningAddProcess<typeof(q_from_left_adder),
-			typeof(q_from_right_adder), typeof(q_from_joining_adder)
-			> p_joining_adder;
+    dyplo::ThreadedProcess<typeof(q_adder), typeof(q_joining_adder_left), process_block_add_constant<int, number_to_add, 1> > p_adder;
+    JoiningAddProcess<typeof(q_joining_adder_left), typeof(q_joining_adder_right), typeof(q_output)> p_joining_adder;
 #endif
+    ThreadedProcessSink<typeof(q_output), display_int, 1> p_display_int;
 
-		dyplo::ThreadedProcess<
-			typeof(q_from_joining_adder), typeof(q_to_output),
-			process_int_to_string,
-			1 /*blocksize*/ > p_int_to_string;
-
-		ThreadedProcessSink<
-			typeof(q_to_output),
-			display_string,
-			1 /*blocksize*/ > p_display_string;
-		
-		/* Connect the processes and queues from output to input */
-		p_display_string.set_input(&q_to_output);
-		p_int_to_string.set_output(&q_to_output);
-		p_int_to_string.set_input(&q_from_joining_adder);
+/*  --- STEP 3 - CONNECT PROCESSES ---
+    Connect the processes and queues from output to input.
+*/
+    p_tee.set_input(&q_input);
+    p_tee.set_output_left(&q_adder);
+    p_tee.set_output_right(&q_joining_adder_right);
 #ifdef HAVE_HARDWARE
-		/* CPU node Fifo 0 to node 1 fifo 0 */
-		f_to_right_adder.addRouteTo(1);
-		/* Node 1 fifo 0 to node 2 fifo 0 */
-		hwControl.routeAddSingle(1, 0, 2, 0);
-		/* CPU node Fifo 1 to node 2 fifo 1 */
-		f_from_left_adder.addRouteTo(2 | (1 << 8));
-		/* Node 2 to CPU node fifo 0 */
-		f_from_joining_adder.addRouteFrom(2);
+    // CPU node Fifo 0 to node 1 fifo 0
+    f_adder.addRouteTo(1);
+    // Node 1 fifo 0 to node 2 fifo 0
+    hwControl.routeAddSingle(1, 0, 2, 0);
+    // CPU node Fifo 1 to node 2 fifo 1
+    f_joining_adder_right.addRouteTo(2 | (1 << 8));
+    // Node 2 to CPU node fifo 0
+    f_output.addRouteFrom(2);
 #else
-		p_joining_adder.set_output(&q_from_joining_adder);
-		p_joining_adder.set_input_left(&q_from_left_adder);
-		p_joining_adder.set_input_right(&q_from_right_adder);
-		p_right_adder.set_output(&q_from_right_adder);
-		p_right_adder.set_input(&q_to_right_adder);
+    p_adder.set_input(&q_adder);
+    p_adder.set_output(&q_joining_adder_left);
+
+    p_joining_adder.set_input_left(&q_joining_adder_left);
+    p_joining_adder.set_input_right(&q_joining_adder_right);
+    p_joining_adder.set_output(&q_output);
 #endif
-		p_left_adder.set_output(&q_from_left_adder);
-		p_left_adder.set_input(&q_to_left_adder);
-		p_tee.set_output_left(&q_to_left_adder);
-		p_tee.set_output_right(&q_to_right_adder);
-		p_tee.set_input(&q_input_ints);
-		p_string_to_int.set_output(&q_input_ints);
-		p_string_to_int.set_input(&q_input_strings);
-		
-		/* Loop reading the input until end of file. Note that output
-		 * is not handled correctly, the program will simply 'abort'
-		 * and data present in the processing pipeline may be lost. */
-		for(;;)
-		{
-			std::string line;
-			std::cin >> line;
-			if (std::cin.eof())
-				break;
-			q_input_strings.push_one(line);
-		}
-	}
-	catch (const std::exception& ex)
-	{
-		std::cerr << "ERROR:\n" << ex.what() << std::endl;
-		return 1;
-	}
-	return 0;
+    p_display_int.set_input(&q_output);
+
+    // Loop reading the input until end of file. Note that output
+    // is not handled correctly, the program will simply 'abort'
+    // and data present in the processing pipeline may be lost.
+    for(;;)
+    {
+      std::string line;
+      std::cin >> line;
+      if (std::cin.eof())
+        break;
+      q_input.push_one(string_to_int(line));
+    }
+  }
+  catch (const std::exception& ex)
+  {
+    std::cerr << "ERROR:\n" << ex.what() << std::endl;
+    return 1;
+  }
+  return 0;
 }

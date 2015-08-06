@@ -85,6 +85,12 @@
   #include "dyplo/filequeue.hpp"
 #endif
 
+template <class T, int raise, int blocksize> void process_block_add_constant(T* dest, T* src)
+{
+  for (int i = 0; i < blocksize; ++i)
+    *dest++ = (*src++) + raise;
+}
+
 int string_to_int(const std::string& src)
 {
   std::string src_digits = "";
@@ -102,12 +108,6 @@ int string_to_int(const std::string& src)
   return result;
 }
 
-template <class T, int raise, int blocksize> void process_block_add_constant(T* dest, T* src)
-{
-  for (int i = 0; i < blocksize; ++i)
-    *dest++ = (*src++) + raise;
-}
-
 void display_int(int* src)
 {
   std::cout << *src << std::endl;
@@ -122,15 +122,24 @@ int main(int argc, char** argv)
     dyplo::HardwareContext hardware;
     dyplo::HardwareControl hwControl(hardware);
     dyplo::FilePollScheduler hardwareScheduler;
-    // Assume that all bitstreams are partial streams.
+
+    // All bitstreams are partial streams.
     hardware.setProgramMode(true);
-    // One or more bitstream filenames can be provided on the
-    // commandline. We load them here, no data is present in the
-    // system yet, so replacing logic is still safe to do here.
-    for (int arg_ind = 1; arg_ind < argc; ++arg_ind)
-    {
-      hardware.program(argv[arg_ind]);
-    }
+
+    // Program "adder" function on node index 1
+    std::string filename = hardware.findPartition("adder", 1);
+    dyplo::HardwareConfig adderCfg(hardware, 1);
+    adderCfg.disableNode();
+    hardware.program(filename.c_str());
+    adderCfg.enableNode();    
+   
+    // Program "joining_adder" function on node index 2
+    filename = hardware.findPartition("joining_adder", 2);
+    dyplo::HardwareConfig joiningAdderCfg(hardware, 2);
+    joiningAdderCfg.disableNode();
+    hardware.program(filename.c_str());
+    joiningAdderCfg.enableNode();
+   
     hardware.setProgramMode(false);
 #endif
 
@@ -154,18 +163,15 @@ int main(int argc, char** argv)
     dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> q_output(2);
 #endif
 
-/* --- STEP 2 - CREATE PROCESSES --- */
+/* --- STEP 2 - CREATE PROCESSES --- */    
     TeeProcess<typeof(q_input), typeof(q_adder), typeof(q_joining_adder_right)> p_tee;
-    // This number will be added by the 'adder process':
+    // This number will be added by the 'adder function':
     const int number_to_add = 8;
 #ifdef HAVE_HARDWARE
     // Hardware processes don't need CPU resources, but they often need configuration.
     // The simplest method is to just write to the configuration "file", the data will be sent
     // via the AXI bus to the offsets corresponding to the file position.
-    {
-      dyplo::File cfg(hardware.openConfig(1, O_WRONLY));
-      cfg.write(&number_to_add, sizeof(number_to_add));
-    }
+    adderCfg.write(&number_to_add, sizeof(number_to_add));
 #else
     dyplo::ThreadedProcess<typeof(q_adder), typeof(q_joining_adder_left), process_block_add_constant<int, number_to_add, 1> > p_adder;
     JoiningAddProcess<typeof(q_joining_adder_left), typeof(q_joining_adder_right), typeof(q_output)> p_joining_adder;

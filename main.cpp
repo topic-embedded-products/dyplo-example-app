@@ -126,15 +126,23 @@ int main(int argc, char** argv)
     // All bitstreams are partial streams.
     hardware.setProgramMode(true);
 
-    // Program "adder" function on node index 1
-    std::string filename = hardware.findPartition("adder", 1);
+    std::string libraryName = "hdl_node_examples";
+       
+    // Search for "adder"  task on node index 1
+    std::string taskName = "adder";
+    std::string fullTaskName = libraryName + "__" + taskName;
+    std::string filename = hardware.findPartition(fullTaskName.c_str(), 1);
     dyplo::HardwareConfig adderCfg(hardware, 1);
+    // Program "adder" task on FPGA
     adderCfg.disableNode();
     hardware.program(filename.c_str());
-    adderCfg.enableNode();    
+    adderCfg.enableNode();
    
-    // Program "joining_adder" function on node index 2
-    filename = hardware.findPartition("joining_adder", 2);
+    // Search for "joining_adder" task on node index 2
+    taskName = "joining_adder";
+    fullTaskName = libraryName + "__" + taskName;
+    filename = hardware.findPartition(fullTaskName.c_str(), 2);
+    // Program "joining_adder" task on FPGA
     dyplo::HardwareConfig joiningAdderCfg(hardware, 2);
     joiningAdderCfg.disableNode();
     hardware.program(filename.c_str());

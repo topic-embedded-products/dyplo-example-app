@@ -1,9 +1,12 @@
-To build this project in OpenEmbedded, just use the dyplo-demo-app.bb
-recipe in meta-topic.
+dyplo-example-app
+=================
+
+To build this project in OpenEmbedded, just use the dyplo-demo-app.bb recipe in meta-topic.
 
 To build and run the example application on a desktop machine:
 
 - Download and build the Dyplo library (libdyplo on github)
+  ````
   git clone git://github.com/topic-embedded-products/libdyplo.git
   cd libdyplo
   autoreconf --install
@@ -12,11 +15,13 @@ To build and run the example application on a desktop machine:
   ../configure --prefix $HOME
   make -j 4
   make install
-
+  ````
 - Add the local libraries to the PKG_CONFIG path
+  ````  
   export PKG_CONFIG_PATH=${HOME}/lib/pkgconfig
-
+  ````
 - Download and build this example application:
+  ````
   git clone git://github.com/topic-embedded-products/dyplo-example-app.git
   cd dyplo-example-app
   autoreconf --install
@@ -24,3 +29,5 @@ To build and run the example application on a desktop machine:
   cd build
   ../configure --prefix $HOME
   make
+  ````
+

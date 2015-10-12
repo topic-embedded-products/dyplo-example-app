@@ -1,5 +1,5 @@
 /*
- * main.cpp
+ * dyplodemoapp.cpp
  *
  * Dyplo example application.
  *

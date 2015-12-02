@@ -50,8 +50,13 @@ int main(int argc, char** argv)
 		dyplo::HardwareContext hardware;
 		dyplo::HardwareControl hwControl(hardware);
 
+		// set base path where to find the partials bitstreams
+		std::string libraryName = "hdl_node_examples";
+		std::string bitstreamBasePath = "/usr/share/bitstreams/" + libraryName;
+		hardware.setBitstreamBasepath(bitstreamBasePath);
+		
 		// Program the hardware. See dyplodemoapp.cpp for more details.
-		static const char *function_name = "hdl_node_examples__joining_adder";
+		static const char *function_name = "joining_adder";
 		hardware.setProgramMode(true);
 		std::string filename = hardware.findPartition(function_name, 2);
 		dyplo::HardwareConfig joiningAdderCfg(hardware, 2);

@@ -1,7 +1,7 @@
 dyplo-example-app
 =================
 
-To build this project in OpenEmbedded, just use the dyplo-demo-app.bb recipe in meta-topic.
+To build this project in OpenEmbedded, just use the dyplo-example-app.bb recipe in meta-dyplo.
 
 To build and run the example application on a desktop machine:
 

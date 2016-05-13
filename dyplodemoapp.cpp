@@ -123,9 +123,6 @@ int main(int argc, char** argv)
     dyplo::HardwareControl hwControl(hardware);
     dyplo::FilePollScheduler hardwareScheduler;
 
-    // All bitstreams are partial streams.
-    hardware.setProgramMode(true);
-
     // set base path where to find the partials bitstreams
     std::string libraryName = "hdl_node_examples";
     std::string bitstreamBasePath = "/usr/share/bitstreams/" + libraryName;
@@ -138,7 +135,7 @@ int main(int argc, char** argv)
     // Program "adder" task on FPGA
     dyplo::HardwareConfig adderCfg(hardware, 1);
     adderCfg.disableNode();
-    hardware.program(filename.c_str());
+    hwControl.program(filename.c_str());
     adderCfg.enableNode();
    
     // Search for "joining_adder" task on node index 2
@@ -148,10 +145,8 @@ int main(int argc, char** argv)
     // Program "joining_adder" task on FPGA
     dyplo::HardwareConfig joiningAdderCfg(hardware, 2);
     joiningAdderCfg.disableNode();
-    hardware.program(filename.c_str());
+    hwControl.program(filename.c_str());
     joiningAdderCfg.enableNode();
-   
-    hardware.setProgramMode(false);
 #endif
 
 /* --- STEP 1 - CREATE QUEUES ---

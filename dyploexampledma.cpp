@@ -56,12 +56,11 @@ int main(int argc, char** argv)
 		hardware.setBitstreamBasepath(bitstreamBasePath);
 		
 		// Program the hardware. See dyplodemoapp.cpp for more details.
-		static const char *function_name = "joining_adder";
-		hardware.setProgramMode(true);
+                static const char *function_name = "joining_adder";
 		std::string filename = hardware.findPartition(function_name, 2);
 		dyplo::HardwareConfig joiningAdderCfg(hardware, 2);
 		joiningAdderCfg.disableNode();
-		hardware.program(filename.c_str());
+                hwControl.program(filename.c_str());
 		joiningAdderCfg.enableNode();
 
 		// We'll need three DMA channels: Two to feed the adder, and one to read the

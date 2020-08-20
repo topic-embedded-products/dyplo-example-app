@@ -6,7 +6,7 @@ AC_LANG([C++])
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 AC_PROG_LIBTOOL
 AX_PTHREAD(HAVE_PTHREAD=yes, AC_MSG_ERROR([Need pthreads]))
-PKG_CHECK_MODULES([DYPLO], [dyplo])
+PKG_CHECK_MODULES([DYPLO], [dyplosw])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile])
 
